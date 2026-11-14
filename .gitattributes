@@ -1,0 +1,5 @@
+# Treat macro source as text with CRLF line endings
+*.bas text eol=crlf
+
+# Sample workbook is binary
+*.xlsx binary
