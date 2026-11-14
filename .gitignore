@@ -1,0 +1,9 @@
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# Local test workbooks (keep sample only)
+/*.xlsm
+/*.xlsb
