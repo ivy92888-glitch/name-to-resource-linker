@@ -1,200 +1,126 @@
-# name-to-resource-linker
+# name-to-resource-linker / 名称匹配资源链接器
 
-A small, dependency-free **VBA macro for Excel-compatible spreadsheets** that,
-for each free-text item name in a source sheet, finds the best-matching
-resource records from one or more configurable reference tables and writes up
-to N ranked reference links (with a clickable hyperlink) back into the sheet.
+> 零依赖的 VBA 宏：对源表里每个自由文本品名，从一张或多张可配置的参考表里找出**最匹配的资源记录**，写回最多 N 条带可点击超链接的排序链接。
+> A dependency-free VBA macro that, for each free-text item name, finds the best-matching resource records from reference tables and writes up to N ranked, hyperlinked links back into the sheet.
 
-> **Unofficial.** Not affiliated with, endorsed by, or sponsored by Microsoft
-> (Excel) or any other spreadsheet software vendor. The word "workbook" is used
-> only as a generic reference to a spreadsheet file.
+> **非官方。** 与 Microsoft（Excel）及任何电子表格厂商无隶属、赞助或背书关系；"workbook" 仅作为表格文件的通用指代。
 
-## Why this exists
+---
 
-Many everyday tasks share the same shape: you have a list of messy, free-text
-names and you want each one linked to the **best** supporting resource — a
-document, a supplier page, a knowledge-base article, a spec sheet — ranked by
-some metric such as price or relevance. Examples that fit this exact pattern:
+## 痛点：它解决什么问题（中文）
 
-- attaching the cheapest supplier link to each requested item,
-- suggesting the top knowledge-base articles for each ticket,
-- linking the most relevant spec sheet to each product in an order.
+另一类高频工作，形状也高度一致：**你有一堆自由文本名称，想给每一个挂上「最合适」的支持资源——文档、供应商页面、知识库文章、规格书——并按价格或相关度排好序**。
 
-Doing this by hand is slow and inconsistent. This macro automates it with a
-robust matching engine and writes the result straight back into the sheet.
+典型例子：
 
-## What the engine does
+- 给每个请购物料贴上「最便宜的供应商链接」；
+- 给每张工单推荐「最相关的知识库文章」；
+- 给订单里每个产品链上「最匹配的规格书」。
 
-The macro is fully generic. It implements seven reusable ideas:
+**手工做法的崩溃点**：
 
-1. **Name-keyed resource registry.** Each reference name maps to a list of
-   resource records, where every record carries several attributes plus a URL.
-2. **Two-tier name matching.** An exact match is preferred; a boundary-aware
-   fuzzy match (so `leg` does **not** match `legacy`) is used as a fallback.
-3. **Link filtering.** Records whose link contains any excluded keyword
-   (e.g. "out of stock") are dropped before ranking.
-4. **Cross-field normalization.** A numeric rate is coerced to a percentage
-   string; invalid metric values are pushed to the end of the sort.
-5. **Metric-based ranking.** Each name's records are sorted by a numeric metric
-   (e.g. lowest unit price first).
-6. **Top-N priority blend.** Exact matches fill first, fuzzy matches fill the
-   rest, capped at `MAX_LINKS` (default 3).
-7. **Composite output + hyperlink.** A readable attribute string
-   (`DisplayName=Code=Rate=Weight=Link`) plus a clickable hyperlink is written
-   per link.
+- 名称不规范，人肉去资源库里翻、还容易错链（如把 `Desk leg` 错链到 `Desk leg kit`）；
+- 同一名字可能有好几条候选，要按价格/相关度挑前 N 条，手工排很累；
+- 还要过滤掉「缺货/停售」之类的无效链接；
+- 几百个名字 × 几十条资源，纯手工基本不可行。
 
-All of the above is driven by configuration constants at the top of the module;
-nothing about a specific domain is hard-coded.
+**这个宏的价值**：内置一套**通用链接引擎**——
 
-## How it works
+1. **名称→资源注册表**：每个参考名对应一组资源记录，每条带多个属性 + 一个 URL；
+2. **两级名称匹配**：优先精确匹配，退而求其次用「边界感知」的模糊匹配（所以 `leg` 不会误配 `legacy`）；
+3. **链接过滤**：含排除关键词（如"缺货"）的记录在排序前先丢掉；
+4. **指标排序**：按数值指标（如最低单价优先）给每条记录排序；
+5. **Top-N 混合**：精确命中先填、模糊命中补位，最多 `MAX_LINKS`（默认 3）条；
+6. **复合输出 + 超链接**：写回可读的属性串（`名称=编码=比率=重量=链接`）+ 可点击超链接。
 
-1. The macro reads the source sheet (the active sheet, or a named one).
-2. For each data row it takes the item name.
-3. It scans the configured resource sheets, building a name → records index,
-   applying the link filter and sorting each name's records by metric.
-4. For each item it collects exact and fuzzy hits, blends them (exact first,
-   capped at `MAX_LINKS`), and writes the composite string + hyperlink.
-5. Rows with no match get cleared output cells.
+全程配置驱动，没有任何特定业务被写死。
 
-### Illustrative example (fictional)
+## What problem it solves (English)
 
-With the bundled sample, the source item `Desk leg` matches:
+Another recurring shape: you have free-text names and want each linked to the *best* supporting resource (doc, supplier page, KB article, spec) ranked by price or relevance. By hand this is slow and error-prone — wrong links (e.g. `Desk leg` → `Desk leg kit`), no ranking, no filtering of out-of-stock items. This macro ships a reusable engine: two-tier matching, link filtering, metric ranking, and a Top-N blend with clickable hyperlinks — all configuration-driven.
 
-- `Desk leg` **exact** (two records, sorted by metric → cheapest first),
-- `X-shaped desk leg` (intelligent: item appears at the **end** of the name),
-- `Desk leg-black` (intelligent: item at the **start** with a `-` suffix),
+---
 
-but it does **not** match `Desk leg kit`, because `kit` is in the generic-suffix
-blacklist and the user input did not contain it.
+## 快速运行（中文）
 
-## Input data format
+**环境要求**
 
-The source sheet layout is configurable. Defaults used by the sample:
+- Excel 或任何兼容的电子表格软件（支持 VBA）；
+- 一张源表 + 一张或多张**放在同一工作簿内**的资源表。
 
-| Column (default) | Meaning | Required |
-|------------------|---------|----------|
-| C (NAME_COL)     | Item name (free text) | Yes |
-| C3 (header)      | Expected header text `Item name` | No (configurable) |
+**五步跑起来**
 
-- `HEADER_ROW` = `3`, `DATA_START_ROW` = `4`.
-- Resource tables live in the **same workbook that holds the macro**
-  (`ThisWorkbook`), each with a header row and data starting at row 2.
-- A resource name may use `-` to drop a suffix and `/` to list aliases; each
-  alias is matched independently.
+1. 打开工作簿，按 `Alt + F11` 导入 `src/NameToResource.bas`；
+2. 把资源表放进**同一个工作簿**（每张表有表头、数据从第 2 行起）；
+3. 改模块顶部常量，匹配你的表结构（见下表）；
+4. 把工作簿另存为 `.xlsm`；
+5. 按 `Alt + F8` 运行宏 **`LinkResources`**。链接默认写到 AG 起的输出列。
 
-### Resource table columns (A..J)
+**默认列布局**
 
-| Col | Field | Role |
-|-----|-------|------|
-| A | ResourceName | key name (`/` aliases, `-` suffix) |
-| B | DisplayName | human-readable label |
-| C | Code | optional identifier |
-| D | Rate | numeric rate → percentage |
-| E | Price | generic price |
-| F | Weight | generic weight / measure |
-| G | Link | URL (filtered by keyword) |
-| H | Category | output only |
-| I | Group | output only |
-| J | Metric | numeric sort key |
+| 列（默认） | 含义 | 必填 |
+|-----------|------|------|
+| C（NAME_COL） | 品名（自由文本） | 是 |
+| C3（表头） | 期望表头文本 `Item name`（`""` 可跳过） | 否 |
 
-## Configuration
+资源表列（A..J）：`A` 资源名（可用 `/` 别名、`-` 去后缀）、`B` 显示名、`C` 编码、`D` 比率、`E` 价格、`F` 重量、`G` 链接（按关键词过滤）、`H` 类别、`I` 组、`J` 排序指标。
 
-All knobs are constants at the top of `src/NameToResource.bas`:
+**想立刻看到效果**：打开 `examples/sample-data.xlsx` 直接运行（示例：`Desk leg` 精确命中两条并按指标排序取最便宜，且不会误配 `Desk leg kit`）。
 
-| Constant | Default | Meaning |
-|----------|---------|---------|
-| `SRC_SHEET` | `""` | `""` = active sheet, else the sheet name |
-| `NAME_COL` | `"C"` | Item name column |
-| `HEADER_ROW` | `3` | Row holding the name header |
-| `DATA_START_ROW` | `4` | First data row |
-| `NAME_HEADER_TEXT` | `"Item name"` | Header to expect (`""` to skip) |
-| `RESOURCE_SHEETS` | `"Resources,ResourcesExtra"` | Comma-separated resource sheets |
-| `RES_NAME_COL` … `RES_METRIC_COL` | `A` … `J` | Resource table column letters |
-| `OUTPUT_LINK_COL_START` | `"AG"` | First output column |
-| `MAX_LINKS` | `3` | Max links per item |
-| `HYPERLINK_ON` | `True` | Attach clickable links |
-| `FORMAT_ON` | `True` | Style output columns |
-| `EXCLUDE_LINK_KEYWORDS` | `"out of stock,discontinued,sold out"` | Links containing these are skipped |
-| `EXCLUDE_SUFFIX_WORDS` | `"accessory,kit,cover,base,cap,decor,part"` | Over-broad name suffixes |
-| `COMPOSITE_SEP` | `"="` | Field separator in output string |
+## Quick start (English)
 
-### Matching rules at a glance
+1. Open your workbook, `Alt+F11` → import `src/NameToResource.bas`.
+2. Put resource tables in the **same workbook** (header + data from row 2).
+3. Edit the config constants at the top.
+4. Save as `.xlsm`, press `Alt+F8`, run **`LinkResources`** (output starts at column AG).
+5. Try `examples/sample-data.xlsx` first.
 
-- **Exact**: `dbName` equals the item, or one of its `/` aliases does.
-- **Intelligent**: `dbName` *contains* the item, and the position check passes:
-  - item at the **end** of the name → OK,
-  - item at the **start** + `-suffix` → OK,
-  - item at the **start** + extra word → NO,
-  - item in the **middle** → NO.
-- Plus a **suffix blacklist** so `Desk leg` won't match `Desk leg kit`.
+---
 
-## Installation
+## 工作原理 / How it works
 
-1. Open your workbook in Excel or any compatible spreadsheet program.
-2. Press `Alt + F11` to open the VBA editor, then `File ▸ Import File…` and
-   select `src/NameToResource.bas`.
-3. Place your resource tables in the **same workbook** that now holds the macro.
-4. Edit the configuration constants at the top of the module to match your layout.
-5. Save the workbook as a macro-enabled file (`.xlsm`).
+1. 读取源表品名；
+2. 扫描配置的资源表，建立「名称→记录」索引，应用链接过滤、按指标排序；
+3. 对每个名字收集精确与模糊命中，混合（精确优先、上限 `MAX_LINKS`），写回复合串 + 超链接；
+4. 无匹配则清空输出单元格。
 
-## Usage
+**匹配规则一览**：精确（名字相等或 `/` 别名之一相等）；智能（名字包含该项且位置检查通过：在结尾 OK、在开头加 `-` 后缀 OK、在开头加额外词 NO、在中间 NO）；再加**后缀黑名单**防止 `Desk leg` 误配 `Desk leg kit`。
 
-1. Prepare the source sheet in the [input format](#input-data-format) above.
-2. Select the sheet you want to process (or leave `SRC_SHEET = ""` for the active
-   sheet).
-3. Run the `LinkResources` macro.
-4. Review the links in the output columns (AG..AI by default); adjust manually if
-   needed.
+**关键常量（唯一真源 `src/NameToResource.bas`）**
 
-A ready-to-run sample lives in
-[`examples/sample-data.xlsx`](examples/sample-data.xlsx).
+| 常量 | 默认 | 含义 |
+|------|------|------|
+| `NAME_COL` | `"C"` | 品名列 |
+| `RESOURCE_SHEETS` | `"Resources,ResourcesExtra"` | 资源表（逗号分隔） |
+| `OUTPUT_LINK_COL_START` | `"AG"` | 首个输出列 |
+| `MAX_LINKS` | `3` | 每个名字最多链接数 |
+| `HYPERLINK_ON` | `True` | 附加可点击链接 |
+| `EXCLUDE_LINK_KEYWORDS` | `out of stock,…` | 含这些词的链接跳过 |
+| `EXCLUDE_SUFFIX_WORDS` | `accessory,kit,…` | 过宽的名字后缀黑名单 |
 
-## File structure
+## 局限 / Limitations
 
-```
-name-to-resource-linker/
-├── src/
-│   └── NameToResource.bas    # the macro (clean-room, generic reimplementation)
-├── docs/
-│   └── Configuration.md      # configuration walkthrough with a second domain
-├── examples/
-│   └── sample-data.xlsx      # neutral, fictional sample workbook
-├── LICENSE                   # MIT
-├── README.md                 # this file
-├── PUSH_GUIDE.md             # how this repo was published to GitHub
-├── .gitignore
-└── .gitattributes
-```
+- 资源表必须和宏在同一工作簿（`ThisWorkbook`）；
+- 仅做整名相等或边界感知子串匹配，不做模糊/拼音匹配；
+- 候选列表先填精确再填模糊（按索引序），不对不同名字做全局重排；
+- 作者环境未实际执行该宏；正式使用前请在数据副本上测试。
 
-## Performance notes
+## 适用场景 / Use cases
 
-Indexing scans each resource sheet once; linking scans the index per source row.
-For typical lookup tables (thousands of rows) this is fast. Each name's record
-list is sorted independently, so cost grows roughly with (source rows) × (distinct
-matched names) plus the per-name sort.
+给请购物料贴最便宜供应商链接、给工单推最相关 KB 文章、给订单产品链最匹配规格书——任何「自由文本名称 → Top-N 资源链接」的映射。
 
-## Limitations
+## 法律声明 / Legal & Non-affiliation
 
-- Resource tables must reside in the same workbook as the macro (`ThisWorkbook`).
-- The engine matches on whole-name equality or boundary-aware substring; it does
-  not do fuzzy/phonetic matching.
-- The final candidate list fills exact matches first then fuzzy, in index order;
-  it is not globally re-sorted across different matched names.
-- This macro was not executed in the author's environment; test it on a copy of
-  your data before relying on it.
-
-## Non-association & Legal
-
-This repository is an **independent, clean-room reimplementation** of a generic
-matching pattern. It contains no proprietary data, no internal nomenclature, and
-no business-specific logic from any third party or former employer. The author
-is not affiliated with, and does not speak for, any company whose data may have
-originally inspired a similar workflow.
-
-The MIT license covers only the author's own contributions; it does not purport
-to license any rights of others. Users are responsible for ensuring their use of
-this tool complies with applicable laws and their own organization's policies.
+本仓库是通用匹配模式的**独立、clean-room 重写**，不含任何第三方的专有数据、内部命名或业务特定逻辑，作者与任何可能启发类似流程的公司无隶属关系、也不代表其立场。MIT 许可证仅覆盖作者本人贡献；使用者需确保用途符合所在地法律与单位政策。
 
 ## License
 
-Released under the [MIT License](LICENSE). Copyright (c) 2026 ivy92888-glitch.
+[MIT License](LICENSE) · Copyright (c) 2026 ivy92888-glitch.
+
+---
+
+<details><summary>维护说明（中英双语单文件，怎么避免漂移）</summary>
+
+本文档是**单文件中英双语**：中文为权威详细描述，英文为简洁摘要（不强求逐句对等）。所有参数名（如 `MAX_LINKS`、`RESOURCE_SHEETS`）直接取自源码常量，唯一真源是 `src/NameToResource.bas`。修改代码逻辑时，只要同步更新源码常量名与本文档常量表中的同名项即可，叙述性文字按需增删，不影响一致性。
+
+</details>
